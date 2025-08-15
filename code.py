@@ -10,7 +10,6 @@ from huggingface_hub import login
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
-# === 🔐 CONFIGURATION ===
 HUGGINGFACE_TOKEN = ""
 SLACK_CHANNEL_ID = ""
 
@@ -33,12 +32,11 @@ SLACK_USERS = {
 
 EMOJIS = ["+1", "tada", "rocket", "fire", "bulb", "white_check_mark", "raised_hands"]
 
-# === 🤖 Load Model ===
 MODEL_ID = "google/gemma-2b-it"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 login(HUGGINGFACE_TOKEN)
 
-print("⏳ Loading Gemma model...")
+print("Loading Gemma model")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
@@ -52,12 +50,11 @@ generator = pipeline(
     device=0 if DEVICE == "cuda" else -1,
     max_new_tokens=180
 )
-print("✅ Model loaded.\n")
+print("Model loaded\n")
 
 embedder = SentenceTransformer('all-MiniLM-L6-v2')
 conversation_memory = {"bot_a": [], "bot_b": []}
 
-# === Slack Utilities ===
 def get_last_messages(limit=6, thread_ts=None):
     url = "https://slack.com/api/conversations.replies" if thread_ts else "https://slack.com/api/conversations.history"
     headers = {"Authorization": f"Bearer {SLACK_USERS['bot_a']['token']}"}
@@ -69,14 +66,14 @@ def get_last_messages(limit=6, thread_ts=None):
         res = requests.get(url, headers=headers, params=params)
         if res.status_code == 429:
             retry = int(res.headers.get("Retry-After", 5))
-            print(f"⏳ Rate limited. Retrying in {retry}s...")
+            print(f"Rate limited Retrying in {retry}s...")
             time.sleep(retry)
         else:
             break
 
     messages = res.json().get("messages", [])
     if not messages:
-        print("⚠️ Slack API returned no messages.")
+        print("Slack API returned no messages.")
     return messages
 
 def filter_history(history, speaker_id):
@@ -106,10 +103,10 @@ def send_message(speaker_key, text, thread_ts=None):
     res = requests.post(url, headers=headers, json=payload)
     result = res.json()
     if result.get("ok"):
-        print(f"📤 {SLACK_USERS[speaker_key]['name']} sent message.")
+        print(f"{SLACK_USERS[speaker_key]['name']} sent message.")
         return result.get("ts")
     else:
-        print("❌ Slack error:", result.get("error"))
+        print("Slack error:", result.get("error"))
         return None
 
 def send_reaction(speaker_key, timestamp):
@@ -131,7 +128,7 @@ def send_reaction(speaker_key, timestamp):
     res = requests.post(url, headers=headers, json=payload)
     result = res.json()
     if result.get("ok"):
-        print(f"✨ {SLACK_USERS[speaker_key]['name']} reacted with :{emoji}:")
+        print(f" {SLACK_USERS[speaker_key]['name']} reacted with :{emoji}:")
 
 # === Conversation Engine ===
 def build_prompt(history, speaker_key):
@@ -178,16 +175,14 @@ def is_topic_shift(text):
     shift_triggers = ["btw", "random question", "speaking of", "on a different note", "by the way", "shift gears", "another update", "unrelated"]
     return any(trigger in text.lower() for trigger in shift_triggers)
 
-# === 🔁 Main Loop ===
-# === 🔁 Continuous Loop ===
 thread_ts = None
 turn_owner = "bot_a"
 
-print("🧵 Starting threaded conversation (Press STOP to end)...\n")
+print(" Starting threaded conversation (Press STOP to end)...\n")
 
 i = 1
 while True:
-    print(f"\n🔄 Turn {i}")
+    print(f"\n Turn {i}")
     i += 1
 
     speaker = turn_owner
@@ -196,7 +191,7 @@ while True:
     history = get_last_messages(limit=8, thread_ts=thread_ts)
     history = filter_history(history, SLACK_USERS[speaker]["user_id"])
     if not history:
-        print("⚠️ No messages found.")
+        print("⚠No messages found.")
         continue
 
     last_msg = history[0]
@@ -205,10 +200,10 @@ while True:
 
     prompt = build_prompt(history, speaker)
     reply = generate_reply(prompt, speaker)
-    print(f"🤖 {SLACK_USERS[speaker]['name']}: {reply}")
+    print(f" {SLACK_USERS[speaker]['name']}: {reply}")
 
     if not thread_ts or is_convo_stale(last_text) or is_topic_shift(last_text):
-        print("🧵 Starting a new thread...")
+        print(" Starting a new thread...")
         thread_ts = send_message(speaker, reply)
     else:
         ts = send_message(speaker, reply, thread_ts)
@@ -219,4 +214,4 @@ while True:
     gc.collect()
     time.sleep(3)
 
-print("\n✅ Conversation finished.")
+print("\n Conversation finished.")
